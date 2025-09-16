@@ -1,6 +1,7 @@
 import { Heart, Star, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import FavoriteButton from "./FavoriteButton";
 
 interface ProductCardProps {
   id: string;
@@ -14,6 +15,7 @@ interface ProductCardProps {
 }
 
 const ProductCard = ({ 
+  id,
   name, 
   price, 
   originalPrice, 
@@ -37,13 +39,9 @@ const ProductCard = ({
             -{discount}%
           </div>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-2 right-2 z-10 bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <Heart className="h-4 w-4" />
-        </Button>
+        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 backdrop-blur-sm rounded-full">
+          <FavoriteButton productId={id} />
+        </div>
         <div className="aspect-square overflow-hidden bg-muted/20">
           <img
             src={image}

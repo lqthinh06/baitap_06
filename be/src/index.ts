@@ -4,6 +4,7 @@ import cors from 'cors';
 import { connectDB } from './config/db';
 import authRoutes from './routes/auth.routes';
 import productRoutes from './routes/product.routes';
+import productExtraRoutes from './routes/product.routes';
 import { ensureIndex } from './search/indexer';
 const app = express();
 app.use(cors());

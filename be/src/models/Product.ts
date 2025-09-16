@@ -11,6 +11,7 @@ export interface IProduct extends Document {
   discount?: number;
   category?: string;     // 👈 new
   views?: number;        // 👈 new
+  wishlistedCount?: number; 
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,7 +26,8 @@ const ProductSchema: Schema = new Schema(
     sold: { type: Number, default: 0 },
     discount: { type: Number, default: 0 },
     category: { type: String, default: "other", index: true },
-    views: { type: Number, default: 0 }
+    views: { type: Number, default: 0 },
+    wishlistedCount: { type: Number, default: 0 }
   },
   { timestamps: true }
 );

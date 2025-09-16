@@ -17,6 +17,10 @@ export interface IUser extends Document {
   resetOtpExpires?: Date | null;
   resetOtpAttempts?: number;
 
+  favorites: mongoose.Types.ObjectId[];
+  recentlyViewed: { product: mongoose.Types.ObjectId; viewedAt: Date }[];
+
+
   comparePassword(candidate: string): Promise<boolean>;
   setPassword(newPass: string): Promise<void>;
 }
@@ -33,7 +37,14 @@ const UserSchema = new Schema<IUser>({
 
   resetOtpHash: { type: String, default: null },
   resetOtpExpires: { type: Date, default: null },
-  resetOtpAttempts: { type: Number, default: 0 }
+  resetOtpAttempts: { type: Number, default: 0 },
+  favorites: [{ type: Schema.Types.ObjectId, ref: 'Product', index: true }],
+  recentlyViewed: [{
+    product: { type: Schema.Types.ObjectId, ref: 'Product' },
+    viewedAt: { type: Date, default: Date.now }
+  }],
+  
+  
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {
