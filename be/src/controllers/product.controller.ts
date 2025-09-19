@@ -162,3 +162,24 @@ export const searchProducts = asyncHandler(async (req: Request, res: Response) =
     products
   });
 });
+
+export const getProductById = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const p = await Product.findById(id);
+  if (!p) return res.status(404).json({ message: "Not found" });
+
+  res.json({
+    id: p.id.toString(),
+    name: p.name,
+    price: p.price,
+    originalPrice: p.originalPrice,
+    image: p.image,
+    rating: p.rating,
+    sold: p.sold,
+    discount: p.discount,
+    category: p.category,
+    views: p.views,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt
+  });
+});

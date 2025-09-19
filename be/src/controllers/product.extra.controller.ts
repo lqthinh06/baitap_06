@@ -1,182 +1,118 @@
-import { Request, Response } from 'express';
-import mongoose from 'mongoose';
-import { asyncHandler } from '../utils/asyncHandler';
-import Product from '../models/Product';
-import User from '../models/User';
-import Order from '../models/Order';   
-import Review from '../models/Review'; 
-import { es } from '../search/es';
-import { ES_INDEX } from '../search/indexer';
+import { Request, Response } from "express";
+import { AuthedRequest } from "../middleware/auth";
+import Product from "../models/Product";
+import Review from "../models/Review";
+import Order from "../models/Order";
+import RecentlyViewed from "../models/RecentlyViewed";
+import { es } from "../search/es";
+import { ES_INDEX } from "../search/indexer";
+import mongoose from "mongoose";
 
-// GET /api/products/:id (chi tiết)
-export const getProductDetail = asyncHandler(async (req: Request, res: Response) => {
-  const doc = await Product.findById(req.params.id);
-  if (!doc) return res.status(404).json({ message: 'Not found' });
-  res.json({ product: doc });
-});
-
-// POST /api/products/:id/favorite
-export const toggleFavorite = asyncHandler(async (req: Request, res: Response) => {
-  // @ts-ignore
-  const userId = req.user._id;
-  const productId = new mongoose.Types.ObjectId(req.params.id);
-
-  const user = await User.findById(userId).select('favorites');
-  if (!user) return res.status(404).json({ message: 'User not found' });
-
-  const isFav = user.favorites.some(id => id.equals(productId));
-  if (isFav) {
-    await Promise.all([
-      User.updateOne({ _id: userId }, { $pull: { favorites: productId } }),
-      Product.updateOne({ _id: productId }, { $inc: { wishlistedCount: -1 } })
-    ]);
-  } else {
-    await Promise.all([
-      User.updateOne({ _id: userId }, { $addToSet: { favorites: productId } }),
-      Product.updateOne({ _id: productId }, { $inc: { wishlistedCount: 1 } })
-    ]);
-  }
-  res.json({ favorited: !isFav });
-});
-
-// GET /api/products/favorites
-export const listFavorites = asyncHandler(async (req: Request, res: Response) => {
-  // @ts-ignore
-  const userId = req.user._id;
-  const user = await User.findById(userId).populate({
-    path: 'favorites',
-    select: 'name price originalPrice image rating sold discount category views'
-  });
-  res.json({ products: user?.favorites ?? [] });
-});
-
-// POST /api/products/:id/view
-export const recordView = asyncHandler(async (req: Request, res: Response) => {
-  const productId = new mongoose.Types.ObjectId(req.params.id);
-  await Product.updateOne({ _id: productId }, { $inc: { views: 1 } });
-
-  // @ts-ignore
-  if (req.user?._id) {
-    // @ts-ignore
-    const userId = req.user._id;
-    await User.updateOne({ _id: userId }, { $pull: { recentlyViewed: { product: productId } } });
-    await User.updateOne({ _id: userId }, { $push: { recentlyViewed: { product: productId, viewedAt: new Date() } } });
-    await User.updateOne({ _id: userId }, { $push: { recentlyViewed: { $each: [], $slice: -50 } } });
-  }
-  res.json({ ok: true });
-});
-
-// GET /api/products/recently-viewed
-export const getRecentlyViewed = asyncHandler(async (req: Request, res: Response) => {
-  // @ts-ignore
-  const userId = req.user._id;
-  const user = await User.findById(userId)
-    .select('recentlyViewed')
-    .populate({ path: 'recentlyViewed.product', select: 'name price originalPrice image rating sold discount category views' });
-
-  const items = user?.recentlyViewed
-    ?.sort((a: any, b: any) => +new Date(b.viewedAt) - +new Date(a.viewedAt))
-    .map((x: any) => x.product)
-    .filter(Boolean) ?? [];
-
-  res.json({ products: items });
-});
-
-// GET /api/products/:id/similar?limit=12
-export const getSimilarProducts = asyncHandler(async (req: Request, res: Response) => {
+// GET /api/products/:id/similar
+export const getSimilarProducts = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const limit = Math.min(parseInt((req.query.limit as string) || '12'), 24);
+  const base = await Product.findById(id);
+  if (!base) return res.status(404).json({ message: "Not found" });
 
-  // Thử ES
-  try {
-    const esResp = await es.search({
-      index: ES_INDEX,
-      size: limit,
-      query: {
-        more_like_this: {
-          fields: ['name', 'category', 'description'],
-          like: [{ _index: ES_INDEX, _id: id }],
-          min_term_freq: 1,
-          min_doc_freq: 1
-        }
+  // Ưu tiên ES: same category + more_like_this theo name
+  const resp = await es.search({
+    index: ES_INDEX,
+    size: 12,
+    query: {
+      bool: {
+        must: [
+          { term: { category: base.category || "other" } },
+          {
+            more_like_this: {
+              fields: ["name", "description"],
+              like: base.name,
+              min_term_freq: 1,
+              min_doc_freq: 1
+            }
+          }
+        ],
+        must_not: [{ term: { id: base.id.toString() } }]
       }
-    });
-    const hits = (esResp.hits.hits || []).filter((h: any) => h._id !== id);
-    if (hits.length) {
-      return res.json({
-        products: hits.map((h: any) => {
-          const s = h._source;
-          return {
-            id: s.id, name: s.name, price: s.price,
-            originalPrice: s.originalPrice, image: s.image,
-            rating: s.rating, sold: s.sold, discount: s.discount,
-            category: s.category, views: s.views
-          };
-        })
-      });
     }
-  } catch (e: any) {
-    console.warn('ES similar fallback:', e?.message);
+  });
+
+  const hits = (resp.hits.hits || []) as any[];
+  const products = hits.map(h => {
+    const s = h._source;
+    return {
+      id: s.id, name: s.name, price: s.price, originalPrice: s.originalPrice,
+      image: s.image, rating: s.rating, sold: s.sold, discount: s.discount,
+      category: s.category, views: s.views
+    };
+  });
+
+  res.json({ products });
+};
+
+// POST /api/products/:id/view  (ghi nhận đã xem + tăng views)
+export const addViewAndTrack = async (req: AuthedRequest, res: Response) => {
+  const { id } = req.params;
+  const userId = req.userId; // có thể undefined nếu không auth
+
+  const doc = await Product.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true });
+  if (!doc) return res.status(404).json({ message: "Not found" });
+
+  if (userId) {
+    // upsert list đã xem (đầu mảng, không trùng)
+    const rv = await RecentlyViewed.findOneAndUpdate(
+      { user: userId },
+      { $pull: { items: { product: doc._id } } }, // remove nếu đã có để đưa lên đầu
+      { new: true, upsert: true }
+    );
+    await RecentlyViewed.updateOne(
+      { user: userId },
+      { $push: { items: { $each: [{ product: doc._id, viewedAt: new Date() }], $position: 0 } } }
+    );
+    // giữ tối đa 50
+    await RecentlyViewed.updateOne(
+      { user: userId },
+      { $push: { items: { $each: [], $slice: 50 } } }
+    );
   }
 
-  // Fallback Mongo
-  const current = await Product.findById(id).select('category price');
-  if (!current) return res.json({ products: [] });
+  res.json({ ok: true, views: doc.views });
+};
 
-  const low = Math.floor((current.price || 0) * 0.7);
-  const high = Math.ceil((current.price || 0) * 1.3);
+// GET /api/me/recently-viewed
+export const getRecentlyViewed = async (req: AuthedRequest, res: Response) => {
+  const userId = req.userId!;
+  const rv = await RecentlyViewed.findOne({ user: userId })
+    .populate({ path: "items.product", model: "Product" });
 
-  const mongo = await Product.find({
-    _id: { $ne: current._id },
-    category: current.category,
-    price: { $gte: low, $lte: high }
-  })
-    .sort({ sold: -1, views: -1 })
-    .limit(limit)
-    .select('name price originalPrice image rating sold discount category views');
+  if (!rv) return res.json({ products: [] });
 
-  res.json({ products: mongo });
-});
+  const products = rv.items
+    .map(i => i.product as any)
+    .filter(Boolean)
+    .map(p => ({
+      id: p._id.toString(),
+      name: p.name, price: p.price, originalPrice: p.originalPrice,
+      image: p.image, rating: p.rating, sold: p.sold,
+      discount: p.discount, category: p.category, views: p.views
+    }));
 
-// GET /api/products/:id/stats
-export const getProductStats = asyncHandler(async (req: Request, res: Response) => {
-  const productId = new mongoose.Types.ObjectId(req.params.id);
-  const product = await Product.findById(productId).select('views wishlistedCount');
-  if (!product) return res.status(404).json({ message: 'Not found' });
+  res.json({ products });
+};
 
-  // Nếu chưa có Order/Review, comment 2 khối dưới và trả buyers/commenters = 0
-  const buyersAgg = await Order.aggregate([
-    { $unwind: '$items' },
-    { $match: { 'items.productId': productId } },
-    { $group: { _id: '$userId' } },
-    { $count: 'buyers' }
+// GET /api/products/:id/stats  (đếm khách mua & số bình luận)
+export const getProductStats = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid id" });
+
+  const [ buyersAgg, commentsCnt ] = await Promise.all([
+    Order.aggregate([
+      { $match: { "items.product": new mongoose.Types.ObjectId(id), status: { $in: ["paid","shipped","completed"] } } },
+      { $group: { _id: "$user" } },
+      { $count: "buyers" }
+    ]),
+    Review.countDocuments({ product: id })
   ]);
-  const buyers = buyersAgg[0]?.buyers ?? 0;
 
-  const commentersAgg = await Review.aggregate([
-    { $match: { productId } },
-    { $group: { _id: '$userId' } },
-    { $count: 'commenters' }
-  ]);
-  const commenters = commentersAgg[0]?.commenters ?? 0;
-
-  res.json({
-    views: product.views,
-    wishlisted: product.wishlistedCount || 0,
-    buyers,
-    commenters
-  });
-});
-
-// GET /api/products/by-ids?ids=a,b,c
-export const getProductsByIds = asyncHandler(async (req: Request, res: Response) => {
-  const idsParam = (req.query.ids as string) || '';
-  const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
-  if (!ids.length) return res.json({ products: [] });
-
-  const docs = await Product.find({ _id: { $in: ids } })
-    .select('name price originalPrice image rating sold discount category views');
-  const map = new Map(docs.map(d => [d.id.toString(), d]));
-  const ordered = ids.map(id => map.get(id)).filter(Boolean);
-  res.json({ products: ordered });
-});
+  const buyers = buyersAgg[0]?.buyers || 0;
+  res.json({ buyers, comments: commentsCnt });
+};

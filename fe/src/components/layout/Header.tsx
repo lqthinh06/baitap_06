@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/useAuth.stores";
 import UserMenu from "@/components/auth/UserMenu";
+import { History } from "lucide-react";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -28,17 +29,22 @@ const Header = () => {
           </div>
 
           {/* Search Bar */}
-          <div className="flex-1 max-w-xl mx-4 relative">
+          {/* <div className="flex-1 max-w-xl mx-4 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Tìm kiếm sản phẩm..."
               className="pl-10 bg-muted/50 border-0 focus:bg-background transition-colors"
             />
-          </div>
+          </div> */}
 
           {/* Actions */}
           <div className="flex items-center space-x-2">
-            <Button variant="ghost" size="icon" className="relative">
+            <Link to="/me/recently-viewed">
+              <Button variant="ghost" size="icon" className="relative">
+                <History className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Button variant="ghost" size="icon" className="relative" onClick={() => navigate("/api/wishlist")}>
               <Heart className="h-5 w-5" />
             </Button>
 

@@ -100,7 +100,7 @@ export default function UserMenu() {
             </DropdownMenuItem>
             <DropdownMenuItem
               className="gap-2"
-              onClick={() => navigate("/wishlist")}
+              onClick={() => navigate("/api/wishlist")}
             >
               <Heart className="h-4 w-4" />
               Yêu thích

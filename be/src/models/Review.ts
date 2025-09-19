@@ -1,25 +1,19 @@
-import mongoose, { Schema, Document } from "mongoose";
+import { Schema, model, Document } from "mongoose";
 
 export interface IReview extends Document {
-  productId: mongoose.Types.ObjectId;
-  userId: mongoose.Types.ObjectId;
-  rating: number; // 1-5
+  user: Schema.Types.ObjectId;
+  product: Schema.Types.ObjectId;
+  rating: number;
   comment?: string;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
-const ReviewSchema = new Schema<IReview>(
-  {
-    productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    rating: { type: Number, required: true, min: 1, max: 5 },
-    comment: { type: String, default: "" }
-  },
-  { timestamps: true }
-);
+const ReviewSchema = new Schema<IReview>({
+  user: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  product: { type: Schema.Types.ObjectId, ref: "Product", required: true, index: true },
+  rating: { type: Number, min: 1, max: 5, required: true },
+  comment: { type: String }
+}, { timestamps: true });
 
-// Một user chỉ được review 1 lần / sản phẩm (nếu muốn enforce)
-ReviewSchema.index({ productId: 1, userId: 1 }, { unique: true });
+ReviewSchema.index({ user: 1, product: 1 }, { unique: true }); // 1 user 1 review/product
 
-export default mongoose.model<IReview>("Review", ReviewSchema);
+export default model<IReview>("Review", ReviewSchema);

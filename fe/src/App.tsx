@@ -7,6 +7,8 @@ import Index from "./pages/Index";
 import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
 import ProductDetail from "./pages/ProductDetail";
+import WishlistPage from "./pages/WishlistPage";
+import RecentlyViewedPage from "./pages/RecentlyViewedPage";
 
 const queryClient = new QueryClient();
 
@@ -20,8 +22,10 @@ const App = () => (
           <Route path="/Login" element={<Index />} />
           <Route path="/home" element={<Home />} />
           <Route path="/" element={<Home />} />
+           <Route path="/product/:id/:slug?" element={<ProductDetail />} />
+           <Route path="/api/wishlist" element={<WishlistPage />} />
+           <Route path="/me/recently-viewed" element={<RecentlyViewedPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
